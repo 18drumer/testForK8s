@@ -1,0 +1,6 @@
+plugins {
+	// Java 17 툴체인이 없는 머신에서도 자동으로 받아올 수 있게 한다.
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'test-for-k8s'

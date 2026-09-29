@@ -55,3 +55,37 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # 이미지 push 가 끝나면 testForGitOps 의 dev overlay 이미지 태그를 갱신
+  # → Argo CD 가 변경을 감지해서 dev 에 자동 배포
+  update-gitops:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitOps repo
+        uses: actions/checkout@v4
+        with:
+          repository: 18drumer/testForGitOps
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Update dev image tag
+        env:
+          KUSTOMIZATION: apps/backend/overlays/dev/kustomization.yaml
+        run: |
+          # docker/metadata-action 의 type=sha,format=short 와 같은 7자리
+          TAG="sha-${GITHUB_SHA::7}"
+          sed -i "s/^\(\s*newTag:\s*\).*/\1${TAG}/" "$KUSTOMIZATION"
+
+          if git diff --quiet; then
+            echo "이미 ${TAG} 로 설정되어 있음"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "backend dev 이미지 ${TAG} 로 변경 (${{ github.repository }}@${GITHUB_SHA::7})"
+          # 그 사이 GitOps 저장소에 다른 커밋이 들어왔을 수 있으므로 rebase 후 push
+          git pull --rebase origin main
+          git push origin HEAD:main
